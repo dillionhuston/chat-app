@@ -1,10 +1,8 @@
 import uuid
 import os
-
-from models.db import db
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from Crypto.Cipher import AES
+from werkzeug.security import generate_password_hash, check_password_hash
+from models.db import db
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -14,31 +12,26 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(128), nullable=False)
     key = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-    #TODO add rotating key each chat
     @staticmethod
     def add_user(username, email, password):
-        print(f"addind user{username}") # debug
-        newuser = User(
+        print(f"[DEBUG] Adding user: {username}") 
+
+        new_user = User(
             id=str(uuid.uuid4()),
-            username = username,
-            password = generate_password_hash(password),
-            email = email, 
-            key = os.urandom(32).hex()[:32]  
-       )
-        db.session.add(newuser)   
-        db.session.commit()
-        db.session.close()   
-        return newuser
-    
+            username=username,
+            email=email,
+            password=generate_password_hash(password),
+            key=os.urandom(32).hex()[:32]  # this soon wont be used 
+        )
+        db.session.add(new_user)
+        return new_user
+
     @staticmethod
-    def check_password(password, pwhash):
-        user_pw =  check_password_hash(password=password, pwhash=pwhash)
-        if user_pw: return
-            
+    def check_password(password, hashed_password):
+        return check_password_hash(hashed_password, password)
+
     def get_key(self):
         return self.key
-    
-        
-    

@@ -2,30 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-// API Service
 class AuthService {
-  static const String baseUrl =
-      'http://127.0.0.1:5000/api'; // Replace with your API URL
+  static const String baseUrl = 'http://127.0.0.1:5000/api';
 
-  Future<Map<String, dynamic>?> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({'username': username, 'password': password}),
       );
 
+      final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return data; // Success: return token and user_id
       } else {
-        return {'error': 'Invalid credentials'};
+        return {'error': data['error'] ?? 'Invalid username or password'};
       }
     } catch (e) {
-      return {'error': 'Network error: $e'};
+      return {'error': 'Network issue: $e. Check your connection!'};
     }
   }
 
-  Future<Map<String, dynamic>?> signup(
+  // Sign up a new user with username, email, and password
+  Future<Map<String, dynamic>> signup(
     String username,
     String email,
     String password,
@@ -41,13 +41,14 @@ class AuthService {
         }),
       );
 
+      final data = jsonDecode(response.body);
       if (response.statusCode == 201) {
-        return jsonDecode(response.body);
+        return data; // Success: return user_id and message
       } else {
-        return {'error': 'Signup failed'};
+        return {'error': data['error'] ?? 'Signup failed. Please try again.'};
       }
     } catch (e) {
-      return {'error': 'Network error: $e'};
+      return {'error': 'Network issue: $e. Check your connection!'};
     }
   }
 }
@@ -62,7 +63,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
   String? _errorMessage;
@@ -70,16 +71,15 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() async {
     if (_formKey.currentState!.validate()) {
       final result = await _authService.login(
-        _emailController.text,
+        _usernameController.text,
         _passwordController.text,
       );
 
       setState(() {
-        _errorMessage = result?['error'];
+        _errorMessage = result['error'];
       });
 
-      if (result?['token'] != null) {
-        // Navigate to HomeScreen on successful login
+      if (result['token'] != null) {
         Navigator.pushReplacementNamed(context, '/home');
       }
     }
@@ -97,21 +97,21 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TextFormField(
-                controller: _emailController,
+                controller: _usernameController,
                 decoration: InputDecoration(
-                  labelText: 'Email',
+                  labelText: 'Username',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12.0),
                   ),
-                  prefixIcon: const Icon(Icons.email),
+                  prefixIcon: const Icon(Icons.person),
                 ),
-                keyboardType: TextInputType.emailAddress,
+                keyboardType: TextInputType.text,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
+                    return 'Please enter your username';
                   }
-                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                    return 'Please enter a valid email';
+                  if (value.length < 3) {
+                    return 'Username must be at least 3 characters';
                   }
                   return null;
                 },
@@ -131,15 +131,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your password';
                   }
-                  if (value.length < 6) {
-                    return 'Password must be at least 6 characters';
+                  if (!RegExp(
+                    r'^(?=.*[A-Za-z])(?=.*\d).{8,}$',
+                  ).hasMatch(value)) {
+                    return 'Password must be 8+ characters with letters and numbers';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16.0),
               if (_errorMessage != null)
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
               const SizedBox(height: 16.0),
               ElevatedButton(
                 onPressed: _login,
@@ -162,6 +168,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
 
@@ -190,12 +203,11 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       setState(() {
-        _errorMessage = result?['error'];
+        _errorMessage = result['error'];
       });
 
-      if (result?['token'] != null) {
-        // Navigate to HomeScreen on successful signup
-        Navigator.pushReplacementNamed(context, '/home');
+      if (result['user_id'] != null) {
+        Navigator.pushReplacementNamed(context, '/login');
       }
     }
   }
@@ -223,6 +235,9 @@ class _SignupScreenState extends State<SignupScreen> {
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your username';
+                  }
+                  if (value.length < 3) {
+                    return 'Username must be at least 3 characters';
                   }
                   return null;
                 },
@@ -263,15 +278,21 @@ class _SignupScreenState extends State<SignupScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your password';
                   }
-                  if (value.length < 6) {
-                    return 'Password must be at least 6 characters';
+                  if (!RegExp(
+                    r'^(?=.*[A-Za-z])(?=.*\d).{8,}$',
+                  ).hasMatch(value)) {
+                    return 'Password must be 8+ characters with letters and numbers';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16.0),
               if (_errorMessage != null)
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
               const SizedBox(height: 16.0),
               ElevatedButton(
                 onPressed: _signup,
@@ -287,12 +308,20 @@ class _SignupScreenState extends State<SignupScreen> {
                 onPressed: () {
                   Navigator.pushNamed(context, '/login');
                 },
-                child: const Text('Already have an account? Login'),
+                child: const Text('Already have an account? Log in'),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
